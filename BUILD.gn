@@ -54,10 +54,11 @@ static_library("chromium") {
   ]
   include_dirs = [
     ".",
-    "out/Default/gen",
-
   ]
-  cflags = [ "-std=gnu++11" ]
+  cflags = [
+    "-std=gnu++11",
+    "-fno-exceptions",
+  ]
   deps = [
     ":dynamic_annotations",
     "//third_party/gtest"
