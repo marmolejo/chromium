@@ -1,0 +1,16 @@
+Name: chromium
+Version: 95dc4998adcdf2d49966721f76894f0765c1cc3c
+URL: http://www.chromium.org/Home
+License: BSD
+
+Description:
+This directory conatins a subset of files from Chromium sources. Original files
+are kept in their respective original folders with the same directory structure
+preserved.
+
+A lot of unused code has been removed to cut dependency problems, also to avoid
+pulling more files with more unused code. Include lines from files that are not
+used anymore have been removed as well.
+
+Some code has been modified for the same reason, to simplify unused use cases
+for the purpose of not pulling more unused files to the tree.
