@@ -25,14 +25,6 @@ bool NeedsLazyInstance(subtle::AtomicWord* state) {
     // Caller must create instance
     return true;
 
-  // It's either in the process of being created, or already created. Spin.
-  // The load has acquire memory ordering as a thread which sees
-  // state_ == STATE_CREATED needs to acquire visibility over
-  // the associated data (buf_). Pairing Release_Store is in
-  // CompleteLazyInstance().
-  while (subtle::Acquire_Load(state) == kLazyInstanceStateCreating) {
-    PlatformThread::YieldCurrentThread();
-  }
   // Someone else created the instance.
   return false;
 }
@@ -45,10 +37,6 @@ void CompleteLazyInstance(subtle::AtomicWord* state,
   // Releases visibility over private_buf_ to readers. Pairing Acquire_Load's
   // are in NeedsInstance() and Pointer().
   subtle::Release_Store(state, new_instance);
-
-  // Make sure that the lazily instantiated object will get destroyed at exit.
-  if (dtor)
-    AtExitManager::RegisterCallback(dtor, lazy_instance);
 }
 
 }  // namespace internal

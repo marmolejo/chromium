@@ -239,48 +239,6 @@ inline void AppendUTF16Value(unsigned code_point,
 
 // Escaping functions ---------------------------------------------------------
 
-// Writes the given character to the output as UTF-8, escaped. Call this
-// function only when the input is wide. Returns true on success. Failure
-// means there was some problem with the encoding, we'll still try to
-// update the |*begin| pointer and add a placeholder character to the
-// output so processing can continue.
-//
-// We will append the character starting at ch[begin] with the buffer ch
-// being |length|. |*begin| will be updated to point to the last character
-// consumed (we may consume more than one for UTF-16) so that if called in
-// a loop, incrementing the pointer will move to the next character.
-//
-// Every single output character will be escaped. This means that if you
-// give it an ASCII character as input, it will be escaped. Some code uses
-// this when it knows that a character is invalid according to its rules
-// for validity. If you don't want escaping for ASCII characters, you will
-// have to filter them out prior to calling this function.
-//
-// Assumes that ch[begin] is within range in the array, but does not assume
-// that any following characters are.
-inline bool AppendUTF8EscapedChar(const base::char16* str, int* begin,
-                                  int length, CanonOutput* output) {
-  // UTF-16 input. Readchar16 will handle invalid characters for us and give
-  // us the kUnicodeReplacementCharacter, so we don't have to do special
-  // checking after failure, just pass through the failure to the caller.
-  unsigned char_value;
-  bool success = ReadUTFChar(str, begin, length, &char_value);
-  AppendUTF8EscapedValue(char_value, output);
-  return success;
-}
-
-// Handles UTF-8 input. See the wide version above for usage.
-inline bool AppendUTF8EscapedChar(const char* str, int* begin, int length,
-                                  CanonOutput* output) {
-  // ReadUTF8Char will handle invalid characters for us and give us the
-  // kUnicodeReplacementCharacter, so we don't have to do special checking
-  // after failure, just pass through the failure to the caller.
-  unsigned ch;
-  bool success = ReadUTFChar(str, begin, length, &ch);
-  AppendUTF8EscapedValue(ch, output);
-  return success;
-}
-
 // Given a '%' character at |*begin| in the string |spec|, this will decode
 // the escaped value and put it into |*unescaped_value| on success (returns
 // true). On failure, this will return false, and will not write into

@@ -45,19 +45,14 @@ typedef pthread_mutex_t* MutexHandle;
 #include <ostream>
 #include <string>
 
-#include "base/base_switches.h"
-#include "base/command_line.h"
 #include "base/debug/alias.h"
 #include "base/debug/debugger.h"
 #include "base/debug/stack_trace.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock_impl.h"
 #include "base/threading/platform_thread.h"
-#include "base/vlog.h"
 #if defined(OS_POSIX)
 #include "base/safe_strerror_posix.h"
 #endif
@@ -69,9 +64,6 @@ typedef pthread_mutex_t* MutexHandle;
 namespace logging {
 
 namespace {
-
-VlogInfo* g_vlog_info = NULL;
-VlogInfo* g_vlog_info_prev = NULL;
 
 const char* const log_severity_names[LOG_NUM_SEVERITIES] = {
   "INFO", "WARNING", "ERROR", "FATAL" };
@@ -145,16 +137,6 @@ uint64 TickCount() {
     static_cast<int64>(ts.tv_nsec) / 1000;
 
   return absolute_micro;
-#endif
-}
-
-void DeleteFilePath(const PathString& log_name) {
-#if defined(OS_WIN)
-  DeleteFile(log_name.c_str());
-#elif defined(OS_NACL)
-  // Do nothing; unlink() isn't supported on NaCl.
-#else
-  unlink(log_name.c_str());
 #endif
 }
 
@@ -352,50 +334,6 @@ LoggingSettings::LoggingSettings()
       lock_log(LOCK_LOG_FILE),
       delete_old(APPEND_TO_OLD_LOG_FILE) {}
 
-bool BaseInitLoggingImpl(const LoggingSettings& settings) {
-#if defined(OS_NACL)
-  // Can log only to the system debug log.
-  CHECK_EQ(settings.logging_dest & ~LOG_TO_SYSTEM_DEBUG_LOG, 0);
-#endif
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  // Don't bother initializing g_vlog_info unless we use one of the
-  // vlog switches.
-  if (command_line->HasSwitch(switches::kV) ||
-      command_line->HasSwitch(switches::kVModule)) {
-    // NOTE: If g_vlog_info has already been initialized, it might be in use
-    // by another thread. Don't delete the old VLogInfo, just create a second
-    // one. We keep track of both to avoid memory leak warnings.
-    CHECK(!g_vlog_info_prev);
-    g_vlog_info_prev = g_vlog_info;
-
-    g_vlog_info =
-        new VlogInfo(command_line->GetSwitchValueASCII(switches::kV),
-                     command_line->GetSwitchValueASCII(switches::kVModule),
-                     &min_log_level);
-  }
-
-  logging_destination = settings.logging_dest;
-
-  // ignore file options unless logging to file is set.
-  if ((logging_destination & LOG_TO_FILE) == 0)
-    return true;
-
-  LoggingLock::Init(settings.lock_log, settings.log_file);
-  LoggingLock logging_lock;
-
-  // Calling InitLogging twice or after some log call has already opened the
-  // default log file will re-initialize to the new options.
-  CloseLogFileUnlocked();
-
-  if (!log_file_name)
-    log_file_name = new PathString();
-  *log_file_name = settings.log_file;
-  if (settings.delete_old == DELETE_OLD_LOG_FILE)
-    DeleteFilePath(*log_file_name);
-
-  return InitializeLogFileHandle();
-}
-
 void SetMinLogLevel(int level) {
   min_log_level = std::min(LOG_FATAL, level);
 }
@@ -412,10 +350,7 @@ int GetVlogLevelHelper(const char* file, size_t N) {
   DCHECK_GT(N, 0U);
   // Note: g_vlog_info may change on a different thread during startup
   // (but will always be valid or NULL).
-  VlogInfo* vlog_info = g_vlog_info;
-  return vlog_info ?
-      vlog_info->GetVlogLevel(base::StringPiece(file, N - 1)) :
-      GetVlogVerbosity();
+  return GetVlogVerbosity();
 }
 
 void SetLogItems(bool enable_process_id, bool enable_thread_id,
@@ -804,7 +739,3 @@ std::wstring GetLogFileFullPath() {
 #endif
 
 }  // namespace logging
-
-std::ostream& std::operator<<(std::ostream& out, const wchar_t* wstr) {
-  return out << base::WideToUTF8(wstr);
-}

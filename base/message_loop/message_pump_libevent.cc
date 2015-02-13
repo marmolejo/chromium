@@ -8,14 +8,13 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "base/auto_reset.h"
 #include "base/compiler_specific.h"
 #include "base/logging.h"
 #include "base/memory/scoped_ptr.h"
 #include "base/observer_list.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/time/time.h"
-#include "third_party/libevent/event.h"
+#include <event.h>
 
 #if defined(OS_MACOSX)
 #include "base/mac/scoped_nsautorelease_pool.h"
@@ -108,33 +107,6 @@ void MessagePumpLibevent::FileDescriptorWatcher::OnFileCanWriteWithoutBlocking(
   pump->DidProcessIOEvent();
 }
 
-MessagePumpLibevent::MessagePumpLibevent()
-    : keep_running_(true),
-      in_run_(false),
-      processed_io_events_(false),
-      event_base_(event_base_new()),
-      wakeup_pipe_in_(-1),
-      wakeup_pipe_out_(-1) {
-  if (!Init())
-     NOTREACHED();
-}
-
-MessagePumpLibevent::~MessagePumpLibevent() {
-  DCHECK(wakeup_event_);
-  DCHECK(event_base_);
-  event_del(wakeup_event_);
-  delete wakeup_event_;
-  if (wakeup_pipe_in_ >= 0) {
-    if (IGNORE_EINTR(close(wakeup_pipe_in_)) < 0)
-      DPLOG(ERROR) << "close";
-  }
-  if (wakeup_pipe_out_ >= 0) {
-    if (IGNORE_EINTR(close(wakeup_pipe_out_)) < 0)
-      DPLOG(ERROR) << "close";
-  }
-  event_base_free(event_base_);
-}
-
 bool MessagePumpLibevent::WatchFileDescriptor(int fd,
                                               bool persistent,
                                               int mode,
@@ -207,74 +179,6 @@ void MessagePumpLibevent::AddIOObserver(IOObserver *obs) {
 
 void MessagePumpLibevent::RemoveIOObserver(IOObserver *obs) {
   io_observers_.RemoveObserver(obs);
-}
-
-// Tell libevent to break out of inner loop.
-static void timer_callback(int fd, short events, void *context)
-{
-  event_base_loopbreak((struct event_base *)context);
-}
-
-// Reentrant!
-void MessagePumpLibevent::Run(Delegate* delegate) {
-  AutoReset<bool> auto_reset_keep_running(&keep_running_, true);
-  AutoReset<bool> auto_reset_in_run(&in_run_, true);
-
-  // event_base_loopexit() + EVLOOP_ONCE is leaky, see http://crbug.com/25641.
-  // Instead, make our own timer and reuse it on each call to event_base_loop().
-  scoped_ptr<event> timer_event(new event);
-
-  for (;;) {
-#if defined(OS_MACOSX)
-    mac::ScopedNSAutoreleasePool autorelease_pool;
-#endif
-
-    bool did_work = delegate->DoWork();
-    if (!keep_running_)
-      break;
-
-    event_base_loop(event_base_, EVLOOP_NONBLOCK);
-    did_work |= processed_io_events_;
-    processed_io_events_ = false;
-    if (!keep_running_)
-      break;
-
-    did_work |= delegate->DoDelayedWork(&delayed_work_time_);
-    if (!keep_running_)
-      break;
-
-    if (did_work)
-      continue;
-
-    did_work = delegate->DoIdleWork();
-    if (!keep_running_)
-      break;
-
-    if (did_work)
-      continue;
-
-    // EVLOOP_ONCE tells libevent to only block once,
-    // but to service all pending events when it wakes up.
-    if (delayed_work_time_.is_null()) {
-      event_base_loop(event_base_, EVLOOP_ONCE);
-    } else {
-      TimeDelta delay = delayed_work_time_ - TimeTicks::Now();
-      if (delay > TimeDelta()) {
-        struct timeval poll_tv;
-        poll_tv.tv_sec = delay.InSeconds();
-        poll_tv.tv_usec = delay.InMicroseconds() % Time::kMicrosecondsPerSecond;
-        event_set(timer_event.get(), -1, 0, timer_callback, event_base_);
-        event_base_set(event_base_, timer_event.get());
-        event_add(timer_event.get(), &poll_tv);
-        event_base_loop(event_base_, EVLOOP_ONCE);
-        event_del(timer_event.get());
-      } else {
-        // It looks like delayed_work_time_ indicates a time in the past, so we
-        // need to call DoDelayedWork now.
-        delayed_work_time_ = TimeTicks();
-      }
-    }
-  }
 }
 
 void MessagePumpLibevent::Quit() {

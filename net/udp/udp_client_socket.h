@@ -5,7 +5,6 @@
 #ifndef NET_SOCKET_UDP_CLIENT_SOCKET_H_
 #define NET_SOCKET_UDP_CLIENT_SOCKET_H_
 
-#include "net/base/net_log.h"
 #include "net/base/rand_callback.h"
 #include "net/udp/datagram_client_socket.h"
 #include "net/udp/udp_socket.h"
@@ -18,25 +17,15 @@ class BoundNetLog;
 class NET_EXPORT_PRIVATE UDPClientSocket : public DatagramClientSocket {
  public:
   UDPClientSocket(DatagramSocket::BindType bind_type,
-                  const RandIntCallback& rand_int_cb,
-                  net::NetLog* net_log,
-                  const net::NetLog::Source& source);
+                  const RandIntCallback& rand_int_cb);
   ~UDPClientSocket() override;
 
   // DatagramClientSocket implementation.
   int Connect(const IPEndPoint& address) override;
-  int Read(IOBuffer* buf,
-           int buf_len,
-           const CompletionCallback& callback) override;
   int Write(IOBuffer* buf,
             int buf_len,
             const CompletionCallback& callback) override;
   void Close() override;
-  int GetPeerAddress(IPEndPoint* address) const override;
-  int GetLocalAddress(IPEndPoint* address) const override;
-  int SetReceiveBufferSize(int32 size) override;
-  int SetSendBufferSize(int32 size) override;
-  const BoundNetLog& NetLog() const override;
 
 #if defined(OS_WIN)
   // Switch to use non-blocking IO. Must be called right after construction and

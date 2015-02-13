@@ -34,26 +34,15 @@
 #endif  // defined(OS_POSIX)
 
 #include "base/basictypes.h"
-#include "base/json/string_escape.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
-#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/sys_byteorder.h"
-#include "base/values.h"
-#include "url/gurl.h"
 #include "url/url_canon.h"
 #include "url/url_canon_ip.h"
 #include "url/url_parse.h"
-#include "net/base/dns_util.h"
-#include "net/base/net_module.h"
-#include "net/base/registry_controlled_domains/registry_controlled_domain.h"
-#include "net/grit/net_resources.h"
-#include "net/http/http_content_disposition.h"
 
 #if defined(OS_ANDROID)
 #include "net/android/network_library.h"
@@ -175,77 +164,6 @@ size_t GetCountOfExplicitlyAllowedPorts() {
   return g_explicitly_allowed_ports.Get().size();
 }
 
-std::string GetSpecificHeader(const std::string& headers,
-                              const std::string& name) {
-  // We want to grab the Value from the "Key: Value" pairs in the headers,
-  // which should look like this (no leading spaces, \n-separated) (we format
-  // them this way in url_request_inet.cc):
-  //    HTTP/1.1 200 OK\n
-  //    ETag: "6d0b8-947-24f35ec0"\n
-  //    Content-Length: 2375\n
-  //    Content-Type: text/html; charset=UTF-8\n
-  //    Last-Modified: Sun, 03 Sep 2006 04:34:43 GMT\n
-  if (headers.empty())
-    return std::string();
-
-  std::string match('\n' + name + ':');
-
-  std::string::const_iterator begin =
-      std::search(headers.begin(), headers.end(), match.begin(), match.end(),
-             base::CaseInsensitiveCompareASCII<char>());
-
-  if (begin == headers.end())
-    return std::string();
-
-  begin += match.length();
-
-  std::string ret;
-  base::TrimWhitespace(std::string(begin,
-                                   std::find(begin, headers.end(), '\n')),
-                       base::TRIM_ALL, &ret);
-  return ret;
-}
-
-std::string CanonicalizeHost(const std::string& host,
-                             url::CanonHostInfo* host_info) {
-  // Try to canonicalize the host.
-  const url::Component raw_host_component(0, static_cast<int>(host.length()));
-  std::string canon_host;
-  url::StdStringCanonOutput canon_host_output(&canon_host);
-  url::CanonicalizeHostVerbose(host.c_str(), raw_host_component,
-                               &canon_host_output, host_info);
-
-  if (host_info->out_host.is_nonempty() &&
-      host_info->family != url::CanonHostInfo::BROKEN) {
-    // Success!  Assert that there's no extra garbage.
-    canon_host_output.Complete();
-    DCHECK_EQ(host_info->out_host.len, static_cast<int>(canon_host.length()));
-  } else {
-    // Empty host, or canonicalization failed.  We'll return empty.
-    canon_host.clear();
-  }
-
-  return canon_host;
-}
-
-std::string GetDirectoryListingHeader(const base::string16& title) {
-  static const base::StringPiece header(
-      NetModule::GetResource(IDR_DIR_HEADER_HTML));
-  // This can be null in unit tests.
-  DLOG_IF(WARNING, header.empty()) <<
-      "Missing resource: directory listing header";
-
-  std::string result;
-  if (!header.empty())
-    result.assign(header.data(), header.size());
-
-  result.append("<script>start(");
-  base::EscapeJSONString(title, true, &result);
-  result.append(");</script>\n");
-
-  return result;
-}
-
 inline bool IsHostCharAlphanumeric(char c) {
   // We can just check lowercase because uppercase characters have already been
   // normalized.
@@ -283,16 +201,6 @@ bool IsCanonicalizedHostCompliant(const std::string& host) {
   }
 
   return most_recent_component_started_alphanumeric;
-}
-
-base::string16 StripWWW(const base::string16& text) {
-  const base::string16 www(base::ASCIIToUTF16("www."));
-  return StartsWith(text, www, true) ? text.substr(www.length()) : text;
-}
-
-base::string16 StripWWWFromHost(const GURL& url) {
-  DCHECK(url.is_valid());
-  return StripWWW(base::ASCIIToUTF16(url.host()));
 }
 
 bool IsPortValid(int port) {
@@ -337,138 +245,6 @@ int SetNonBlocking(int fd) {
     return flags;
   return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 #endif
-}
-
-bool ParseHostAndPort(std::string::const_iterator host_and_port_begin,
-                      std::string::const_iterator host_and_port_end,
-                      std::string* host,
-                      int* port) {
-  if (host_and_port_begin >= host_and_port_end)
-    return false;
-
-  // When using url, we use char*.
-  const char* auth_begin = &(*host_and_port_begin);
-  int auth_len = host_and_port_end - host_and_port_begin;
-
-  url::Component auth_component(0, auth_len);
-  url::Component username_component;
-  url::Component password_component;
-  url::Component hostname_component;
-  url::Component port_component;
-
-  url::ParseAuthority(auth_begin, auth_component, &username_component,
-      &password_component, &hostname_component, &port_component);
-
-  // There shouldn't be a username/password.
-  if (username_component.is_valid() || password_component.is_valid())
-    return false;
-
-  if (!hostname_component.is_nonempty())
-    return false;  // Failed parsing.
-
-  int parsed_port_number = -1;
-  if (port_component.is_nonempty()) {
-    parsed_port_number = url::ParsePort(auth_begin, port_component);
-
-    // If parsing failed, port_number will be either PORT_INVALID or
-    // PORT_UNSPECIFIED, both of which are negative.
-    if (parsed_port_number < 0)
-      return false;  // Failed parsing the port number.
-  }
-
-  if (port_component.len == 0)
-    return false;  // Reject inputs like "foo:"
-
-  unsigned char tmp_ipv6_addr[16];
-
-  // If the hostname starts with a bracket, it is either an IPv6 literal or
-  // invalid. If it is an IPv6 literal then strip the brackets.
-  if (hostname_component.len > 0 &&
-      auth_begin[hostname_component.begin] == '[') {
-    if (auth_begin[hostname_component.end() - 1] == ']' &&
-        url::IPv6AddressToNumber(
-            auth_begin, hostname_component, tmp_ipv6_addr)) {
-      // Strip the brackets.
-      hostname_component.begin++;
-      hostname_component.len -= 2;
-    } else {
-      return false;
-    }
-  }
-
-  // Pass results back to caller.
-  host->assign(auth_begin + hostname_component.begin, hostname_component.len);
-  *port = parsed_port_number;
-
-  return true;  // Success.
-}
-
-bool ParseHostAndPort(const std::string& host_and_port,
-                      std::string* host,
-                      int* port) {
-  return ParseHostAndPort(
-      host_and_port.begin(), host_and_port.end(), host, port);
-}
-
-std::string GetHostAndPort(const GURL& url) {
-  // For IPv6 literals, GURL::host() already includes the brackets so it is
-  // safe to just append a colon.
-  return base::StringPrintf("%s:%d", url.host().c_str(),
-                            url.EffectiveIntPort());
-}
-
-std::string GetHostAndOptionalPort(const GURL& url) {
-  // For IPv6 literals, GURL::host() already includes the brackets
-  // so it is safe to just append a colon.
-  if (url.has_port())
-    return base::StringPrintf("%s:%s", url.host().c_str(), url.port().c_str());
-  return url.host();
-}
-
-bool IsHostnameNonUnique(const std::string& hostname) {
-  // CanonicalizeHost requires surrounding brackets to parse an IPv6 address.
-  const std::string host_or_ip = hostname.find(':') != std::string::npos ?
-      "[" + hostname + "]" : hostname;
-  url::CanonHostInfo host_info;
-  std::string canonical_name = CanonicalizeHost(host_or_ip, &host_info);
-
-  // If canonicalization fails, then the input is truly malformed. However,
-  // to avoid mis-reporting bad inputs as "non-unique", treat them as unique.
-  if (canonical_name.empty())
-    return false;
-
-  // If |hostname| is an IP address, check to see if it's in an IANA-reserved
-  // range.
-  if (host_info.IsIPAddress()) {
-    IPAddressNumber host_addr;
-    if (!ParseIPLiteralToNumber(hostname.substr(host_info.out_host.begin,
-                                                host_info.out_host.len),
-                                &host_addr)) {
-      return false;
-    }
-    switch (host_info.family) {
-      case url::CanonHostInfo::IPV4:
-      case url::CanonHostInfo::IPV6:
-        return IsIPAddressReserved(host_addr);
-      case url::CanonHostInfo::NEUTRAL:
-      case url::CanonHostInfo::BROKEN:
-        return false;
-    }
-  }
-
-  // Check for a registry controlled portion of |hostname|, ignoring private
-  // registries, as they already chain to ICANN-administered registries,
-  // and explicitly ignoring unknown registries.
-  //
-  // Note: This means that as new gTLDs are introduced on the Internet, they
-  // will be treated as non-unique until the registry controlled domain list
-  // is updated. However, because gTLDs are expected to provide significant
-  // advance notice to deprecate older versions of this code, this an
-  // acceptable tradeoff.
-  return 0 == registry_controlled_domains::GetRegistryLength(
-                  canonical_name,
-                  registry_controlled_domains::EXCLUDE_UNKNOWN_REGISTRIES,
-                  registry_controlled_domains::EXCLUDE_PRIVATE_REGISTRIES);
 }
 
 // Don't compare IPv4 and IPv6 addresses (they have different range
@@ -581,69 +357,6 @@ bool GetIPAddressFromSockAddr(const struct sockaddr* sock_addr,
   return false;  // Unrecognized |sa_family|.
 }
 
-std::string IPAddressToString(const uint8* address,
-                              size_t address_len) {
-  std::string str;
-  url::StdStringCanonOutput output(&str);
-
-  if (address_len == kIPv4AddressSize) {
-    url::AppendIPv4Address(address, &output);
-  } else if (address_len == kIPv6AddressSize) {
-    url::AppendIPv6Address(address, &output);
-  } else {
-    CHECK(false) << "Invalid IP address with length: " << address_len;
-  }
-
-  output.Complete();
-  return str;
-}
-
-std::string IPAddressToStringWithPort(const uint8* address,
-                                      size_t address_len,
-                                      uint16 port) {
-  std::string address_str = IPAddressToString(address, address_len);
-
-  if (address_len == kIPv6AddressSize) {
-    // Need to bracket IPv6 addresses since they contain colons.
-    return base::StringPrintf("[%s]:%d", address_str.c_str(), port);
-  }
-  return base::StringPrintf("%s:%d", address_str.c_str(), port);
-}
-
-std::string NetAddressToString(const struct sockaddr* sa,
-                               socklen_t sock_addr_len) {
-  const uint8* address;
-  size_t address_len;
-  if (!GetIPAddressFromSockAddr(sa, sock_addr_len, &address,
-                                &address_len, NULL)) {
-    NOTREACHED();
-    return std::string();
-  }
-  return IPAddressToString(address, address_len);
-}
-
-std::string NetAddressToStringWithPort(const struct sockaddr* sa,
-                                       socklen_t sock_addr_len) {
-  const uint8* address;
-  size_t address_len;
-  uint16 port;
-  if (!GetIPAddressFromSockAddr(sa, sock_addr_len, &address,
-                                &address_len, &port)) {
-    NOTREACHED();
-    return std::string();
-  }
-  return IPAddressToStringWithPort(address, address_len, port);
-}
-
-std::string IPAddressToString(const IPAddressNumber& addr) {
-  return IPAddressToString(&addr.front(), addr.size());
-}
-
-std::string IPAddressToStringWithPort(const IPAddressNumber& addr,
-                                      uint16 port) {
-  return IPAddressToStringWithPort(&addr.front(), addr.size(), port);
-}
-
 std::string IPAddressToPackedString(const IPAddressNumber& addr) {
   return std::string(reinterpret_cast<const char *>(&addr.front()),
                      addr.size());
@@ -667,68 +380,6 @@ std::string GetHostName() {
   }
   return std::string(buffer);
 #endif  // !defined(OS_NACL)
-}
-
-void GetIdentityFromURL(const GURL& url,
-                        base::string16* username,
-                        base::string16* password) {
-  UnescapeRule::Type flags =
-      UnescapeRule::SPACES | UnescapeRule::URL_SPECIAL_CHARS;
-  *username = UnescapeAndDecodeUTF8URLComponent(url.username(), flags);
-  *password = UnescapeAndDecodeUTF8URLComponent(url.password(), flags);
-}
-
-std::string GetHostOrSpecFromURL(const GURL& url) {
-  return url.has_host() ? TrimEndingDot(url.host()) : url.spec();
-}
-
-bool CanStripTrailingSlash(const GURL& url) {
-  // Omit the path only for standard, non-file URLs with nothing but "/" after
-  // the hostname.
-  return url.IsStandard() && !url.SchemeIsFile() &&
-      !url.SchemeIsFileSystem() && !url.has_query() && !url.has_ref()
-      && url.path() == "/";
-}
-
-GURL SimplifyUrlForRequest(const GURL& url) {
-  DCHECK(url.is_valid());
-  GURL::Replacements replacements;
-  replacements.ClearUsername();
-  replacements.ClearPassword();
-  replacements.ClearRef();
-  return url.ReplaceComponents(replacements);
-}
-
-// Specifies a comma separated list of port numbers that should be accepted
-// despite bans. If the string is invalid no allowed ports are stored.
-void SetExplicitlyAllowedPorts(const std::string& allowed_ports) {
-  if (allowed_ports.empty())
-    return;
-
-  std::multiset<int> ports;
-  size_t last = 0;
-  size_t size = allowed_ports.size();
-  // The comma delimiter.
-  const std::string::value_type kComma = ',';
-
-  // Overflow is still possible for evil user inputs.
-  for (size_t i = 0; i <= size; ++i) {
-    // The string should be composed of only digits and commas.
-    if (i != size && !IsAsciiDigit(allowed_ports[i]) &&
-        (allowed_ports[i] != kComma))
-      return;
-    if (i == size || allowed_ports[i] == kComma) {
-      if (i > last) {
-        int port;
-        base::StringToInt(base::StringPiece(allowed_ports.begin() + last,
-                                            allowed_ports.begin() + i),
-                          &port);
-        ports.insert(port);
-      }
-      last = i + 1;
-    }
-  }
-  g_explicitly_allowed_ports.Get() = ports;
 }
 
 ScopedPortException::ScopedPortException(int port) : port_(port) {
@@ -898,36 +549,6 @@ IPAddressNumber ConvertIPv4MappedToIPv4(const IPAddressNumber& address) {
   DCHECK(IsIPv4Mapped(address));
   return IPAddressNumber(address.begin() + arraysize(kIPv4MappedPrefix),
                          address.end());
-}
-
-bool ParseCIDRBlock(const std::string& cidr_literal,
-                    IPAddressNumber* ip_number,
-                    size_t* prefix_length_in_bits) {
-  // We expect CIDR notation to match one of these two templates:
-  //   <IPv4-literal> "/" <number of bits>
-  //   <IPv6-literal> "/" <number of bits>
-
-  std::vector<std::string> parts;
-  base::SplitString(cidr_literal, '/', &parts);
-  if (parts.size() != 2)
-    return false;
-
-  // Parse the IP address.
-  if (!ParseIPLiteralToNumber(parts[0], ip_number))
-    return false;
-
-  // Parse the prefix length.
-  int number_of_bits = -1;
-  if (!base::StringToInt(parts[1], &number_of_bits))
-    return false;
-
-  // Make sure the prefix length is in a valid range.
-  if (number_of_bits < 0 ||
-      number_of_bits > static_cast<int>(ip_number->size() * 8))
-    return false;
-
-  *prefix_length_in_bits = static_cast<size_t>(number_of_bits);
-  return true;
 }
 
 bool IPNumberMatchesPrefix(const IPAddressNumber& ip_number,

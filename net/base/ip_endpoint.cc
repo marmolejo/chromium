@@ -5,7 +5,6 @@
 #include "net/base/ip_endpoint.h"
 
 #include "base/logging.h"
-#include "base/strings/string_number_conversions.h"
 #include "base/sys_byteorder.h"
 #if defined(OS_WIN)
 #include <winsock2.h>
@@ -99,14 +98,6 @@ bool IPEndPoint::FromSockAddr(const struct sockaddr* sock_addr,
   address_.assign(address, address + address_len);
   port_ = port;
   return true;
-}
-
-std::string IPEndPoint::ToString() const {
-  return IPAddressToStringWithPort(address_, port_);
-}
-
-std::string IPEndPoint::ToStringWithoutPort() const {
-  return IPAddressToString(address_);
 }
 
 bool IPEndPoint::operator<(const IPEndPoint& that) const {

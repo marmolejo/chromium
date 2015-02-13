@@ -39,7 +39,6 @@
 
 #ifdef __GNUC__
 /* valgrind.h uses gcc extensions so it won't build with other compilers */
-# include "base/third_party/valgrind/valgrind.h"
 #endif
 
 /* Compiler-based ThreadSanitizer defines

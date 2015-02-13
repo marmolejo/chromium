@@ -26,16 +26,6 @@ class NET_EXPORT_PRIVATE DatagramSocket {
 
   // Close the socket.
   virtual void Close() = 0;
-
-  // Copy the remote udp address into |address| and return a network error code.
-  virtual int GetPeerAddress(IPEndPoint* address) const = 0;
-
-  // Copy the local udp address into |address| and return a network error code.
-  // (similar to getsockname)
-  virtual int GetLocalAddress(IPEndPoint* address) const = 0;
-
-  // Gets the NetLog for this socket.
-  virtual const BoundNetLog& NetLog() const = 0;
 };
 
 }  // namespace net

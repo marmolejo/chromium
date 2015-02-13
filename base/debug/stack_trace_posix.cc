@@ -38,7 +38,6 @@
 #include "base/memory/singleton.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/strings/string_number_conversions.h"
 #include "build/build_config.h"
 
 #if defined(USE_SYMBOLIZE)

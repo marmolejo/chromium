@@ -21,8 +21,6 @@
 #include "base/basictypes.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
-#include "base/strings/utf_string_conversion_utils.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/third_party/icu/icu_utf.h"
 #include "build/build_config.h"
 
@@ -225,56 +223,6 @@ TrimPositions TrimStringT(const STR& input,
       ((last_good_char == last_char) ? TRIM_NONE : TRIM_TRAILING));
 }
 
-bool TrimString(const string16& input,
-                const base::StringPiece16& trim_chars,
-                string16* output) {
-  return TrimStringT(input, trim_chars.as_string(), TRIM_ALL, output) !=
-      TRIM_NONE;
-}
-
-bool TrimString(const std::string& input,
-                const base::StringPiece& trim_chars,
-                std::string* output) {
-  return TrimStringT(input, trim_chars.as_string(), TRIM_ALL, output) !=
-      TRIM_NONE;
-}
-
-void TruncateUTF8ToByteSize(const std::string& input,
-                            const size_t byte_size,
-                            std::string* output) {
-  DCHECK(output);
-  if (byte_size > input.length()) {
-    *output = input;
-    return;
-  }
-  DCHECK_LE(byte_size, static_cast<uint32>(kint32max));
-  // Note: This cast is necessary because CBU8_NEXT uses int32s.
-  int32 truncation_length = static_cast<int32>(byte_size);
-  int32 char_index = truncation_length - 1;
-  const char* data = input.data();
-
-  // Using CBU8, we will move backwards from the truncation point
-  // to the beginning of the string looking for a valid UTF8
-  // character.  Once a full UTF8 character is found, we will
-  // truncate the string to the end of that character.
-  while (char_index >= 0) {
-    int32 prev = char_index;
-    base_icu::UChar32 code_point = 0;
-    CBU8_NEXT(data, char_index, truncation_length, code_point);
-    if (!IsValidCharacter(code_point) ||
-        !IsValidCodepoint(code_point)) {
-      char_index = prev - 1;
-    } else {
-      break;
-    }
-  }
-
-  if (char_index >= 0 )
-    *output = input.substr(0, char_index);
-  else
-    output->clear();
-}
-
 TrimPositions TrimWhitespace(const string16& input,
                              TrimPositions positions,
                              string16* output) {
@@ -406,20 +354,6 @@ bool IsStringASCII(const std::wstring& str) {
 }
 #endif
 
-bool IsStringUTF8(const StringPiece& str) {
-  const char *src = str.data();
-  int32 src_len = static_cast<int32>(str.length());
-  int32 char_index = 0;
-
-  while (char_index < src_len) {
-    int32 code_point;
-    CBU8_NEXT(src, char_index, src_len, code_point);
-    if (!IsValidCharacter(code_point))
-      return false;
-  }
-  return true;
-}
-
 }  // namespace base
 
 template<typename Iter>
@@ -525,38 +459,6 @@ bool EndsWith(const string16& str, const string16& search,
   return EndsWithT(str, search, case_sensitive);
 }
 
-static const char* const kByteStringsUnlocalized[] = {
-  " B",
-  " kB",
-  " MB",
-  " GB",
-  " TB",
-  " PB"
-};
-
-string16 FormatBytesUnlocalized(int64 bytes) {
-  double unit_amount = static_cast<double>(bytes);
-  size_t dimension = 0;
-  const int kKilo = 1024;
-  while (unit_amount >= kKilo &&
-         dimension < arraysize(kByteStringsUnlocalized) - 1) {
-    unit_amount /= kKilo;
-    dimension++;
-  }
-
-  char buf[64];
-  if (bytes != 0 && dimension > 0 && unit_amount < 100) {
-    base::snprintf(buf, arraysize(buf), "%.1lf%s", unit_amount,
-                   kByteStringsUnlocalized[dimension]);
-  } else {
-    base::snprintf(buf, arraysize(buf), "%.0lf%s", unit_amount,
-                   kByteStringsUnlocalized[dimension]);
-  }
-
-  return base::ASCIIToUTF16(buf);
-}
-
-// Runs in O(n) time in the length of |str|.
 template<class StringType>
 void DoReplaceSubstringsAfterOffset(StringType* str,
                                     size_t offset,
@@ -973,16 +875,6 @@ static bool MatchPatternT(const CHAR* eval, const CHAR* eval_end,
   return false;
 }
 
-struct NextCharUTF8 {
-  base_icu::UChar32 operator()(const char** p, const char* end) {
-    base_icu::UChar32 c;
-    int offset = 0;
-    CBU8_NEXT(*p, offset, end - *p, c);
-    *p += offset;
-    return c;
-  }
-};
-
 struct NextCharUTF16 {
   base_icu::UChar32 operator()(const char16** p, const char16* end) {
     base_icu::UChar32 c;
@@ -992,13 +884,6 @@ struct NextCharUTF16 {
     return c;
   }
 };
-
-bool MatchPattern(const base::StringPiece& eval,
-                  const base::StringPiece& pattern) {
-  return MatchPatternT(eval.data(), eval.data() + eval.size(),
-                       pattern.data(), pattern.data() + pattern.size(),
-                       0, NextCharUTF8());
-}
 
 bool MatchPattern(const string16& eval, const string16& pattern) {
   return MatchPatternT(eval.c_str(), eval.c_str() + eval.size(),

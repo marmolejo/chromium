@@ -27,17 +27,6 @@ class CRYPTO_EXPORT SecureHash {
   virtual void Update(const void* input, size_t len) = 0;
   virtual void Finish(void* output, size_t len) = 0;
 
-  // Serialize the context, so it can be restored at a later time.
-  // |pickle| will contain the serialized data.
-  // Returns whether or not |pickle| was filled.
-  virtual bool Serialize(Pickle* pickle) = 0;
-
-  // Restore the context that was saved earlier.
-  // |data_iterator| allows this to be used as part of a larger pickle.
-  // |pickle| holds the saved data.
-  // Returns success or failure.
-  virtual bool Deserialize(PickleIterator* data_iterator) = 0;
-
  protected:
   SecureHash() {}
 

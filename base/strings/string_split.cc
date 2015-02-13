@@ -6,7 +6,6 @@
 
 #include "base/logging.h"
 #include "base/strings/string_util.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/third_party/icu/icu_utf.h"
 
 namespace base {
@@ -181,24 +180,6 @@ void SplitStringUsingSubstr(const std::string& str,
                             const std::string& s,
                             std::vector<std::string>* r) {
   SplitStringUsingSubstrT(str, s, r);
-}
-
-void SplitStringDontTrim(const string16& str,
-                         char16 c,
-                         std::vector<string16>* r) {
-  DCHECK(CBU16_IS_SINGLE(c));
-  SplitStringT(str, c, false, r);
-}
-
-void SplitStringDontTrim(const std::string& str,
-                         char c,
-                         std::vector<std::string>* r) {
-  DCHECK(IsStringUTF8(str));
-#if CHAR_MIN < 0
-  DCHECK(c >= 0);
-#endif
-  DCHECK(c < 0x7F);
-  SplitStringT(str, c, false, r);
 }
 
 void SplitStringAlongWhitespace(const string16& str,

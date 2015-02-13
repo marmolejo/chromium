@@ -15,8 +15,6 @@
 
 #include <ostream>
 
-#include "base/strings/utf_string_conversions.h"
-
 namespace base {
 
 int c16memcmp(const char16* s1, const char16* s2, size_t n) {
@@ -65,14 +63,6 @@ char16* c16memset(char16* s, char16 c, size_t n) {
     ++s;
   }
   return s_orig;
-}
-
-std::ostream& operator<<(std::ostream& out, const string16& str) {
-  return out << UTF16ToUTF8(str);
-}
-
-void PrintTo(const string16& str, std::ostream* out) {
-  *out << str;
 }
 
 }  // namespace base

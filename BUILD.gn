@@ -1,0 +1,70 @@
+static_library("chromium") {
+  sources = [
+    "base/base64.cc",
+    "base/callback_internal.cc",
+    "base/debug/stack_trace.cc",
+    "base/debug/stack_trace_posix.cc",
+    "base/debug/proc_maps_linux.cc",
+    "base/files/file_util_posix.cc",
+    "base/lazy_instance.cc",
+    "base/logging.cc",
+    "base/memory/ref_counted.cc",
+    "base/memory/weak_ptr.cc",
+    "base/memory/singleton.cc",
+    "base/message_loop/message_pump_libevent.cc",
+    "base/rand_util_posix.cc",
+    "base/strings/string_piece.cc",
+    "base/third_party/symbolize/symbolize.cc",
+    "base/third_party/symbolize/demangle.cc",
+    "base/threading/thread_restrictions.cc",
+    "crypto/random.cc",
+    "crypto/secure_hash_default.cc",
+    "crypto/sha2.cc",
+    "crypto/third_party/nss/sha512.cc",
+    "net/base/io_buffer.cc",
+    "net/base/ip_endpoint.cc",
+    "net/base/net_util.cc",
+    "net/socket/socket_descriptor.cc",
+    "net/udp/udp_client_socket.cc",
+    "net/udp/udp_socket_libevent.cc",
+    "third_party/modp_b64/modp_b64.cc",
+    "url/url_canon_internal.cc",
+    "url/url_canon_ip.cc",
+    "base/debug/alias.cc",
+    "base/debug/debugger_posix.cc",
+    "base/sequence_checker_impl.cc",
+    "base/synchronization/lock_impl_posix.cc",
+    "base/synchronization/lock.cc",
+    "base/threading/platform_thread_posix.cc",
+    "base/threading/sequenced_worker_pool.cc",
+    "base/threading/thread_checker_impl.cc",
+    "base/threading/non_thread_safe_impl.cc",
+    "base/threading/thread_local_posix.cc",
+    "base/strings/string16.cc",
+    "base/files/scoped_file.cc",
+    "base/strings/string_split.cc",
+    "base/strings/string_util.cc",
+    "base/strings/string_util_constants.cc",
+    "base/at_exit.cc",
+    "base/safe_strerror_posix.cc",
+  ]
+  defines = [
+    "_DEBUG",
+    "USE_SYMBOLIZE",
+  ]
+  include_dirs = [
+    ".",
+    "out/Default/gen",
+
+  ]
+  cflags = [ "-std=gnu++11" ]
+  deps = [
+    ":dynamic_annotations",
+    "//third_party/gtest"
+  ]
+}
+
+static_library("dynamic_annotations") {
+  sources = [ "base/third_party/dynamic_annotations/dynamic_annotations.c" ]
+  include_dirs = [ "." ]
+}
