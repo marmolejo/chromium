@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 
-#ifndef BASE_DEBUG_TRACE_EVENT_IMPL_H_
-#define BASE_DEBUG_TRACE_EVENT_IMPL_H_
+#ifndef BASE_TRACE_EVENT_TRACE_EVENT_IMPL_H_
+#define BASE_TRACE_EVENT_TRACE_EVENT_IMPL_H_
 
 #include <stack>
 #include <string>
@@ -27,17 +27,17 @@
 // Older style trace macros with explicit id and extra data
 // Only these macros result in publishing data to ETW as currently implemented.
 #define TRACE_EVENT_BEGIN_ETW(name, id, extra) \
-    base::debug::TraceLog::AddTraceEventEtw( \
+    base::trace_event::TraceLog::AddTraceEventEtw( \
         TRACE_EVENT_PHASE_BEGIN, \
         name, reinterpret_cast<const void*>(id), extra)
 
 #define TRACE_EVENT_END_ETW(name, id, extra) \
-    base::debug::TraceLog::AddTraceEventEtw( \
+    base::trace_event::TraceLog::AddTraceEventEtw( \
         TRACE_EVENT_PHASE_END, \
         name, reinterpret_cast<const void*>(id), extra)
 
 #define TRACE_EVENT_INSTANT_ETW(name, id, extra) \
-    base::debug::TraceLog::AddTraceEventEtw( \
+    base::trace_event::TraceLog::AddTraceEventEtw( \
         TRACE_EVENT_PHASE_INSTANT, \
         name, reinterpret_cast<const void*>(id), extra)
 
@@ -49,7 +49,7 @@ namespace base {
 class WaitableEvent;
 class MessageLoop;
 
-namespace debug {
+namespace trace_event {
 
 // For any argument of type TRACE_VALUE_TYPE_CONVERTABLE the provided
 // class must implement this interface.
@@ -745,7 +745,6 @@ class BASE_EXPORT TraceLog {
   // This lock protects accesses to thread_names_, thread_event_start_times_
   // and thread_colors_.
   Lock thread_info_lock_;
-  int locked_line_;
   Mode mode_;
   int num_traces_recorded_;
   scoped_ptr<TraceBuffer> logged_events_;
@@ -808,7 +807,7 @@ class BASE_EXPORT TraceLog {
   DISALLOW_COPY_AND_ASSIGN(TraceLog);
 };
 
-}  // namespace debug
+}  // namespace trace_event
 }  // namespace base
 
-#endif  // BASE_DEBUG_TRACE_EVENT_IMPL_H_
+#endif  // BASE_TRACE_EVENT_TRACE_EVENT_IMPL_H_
