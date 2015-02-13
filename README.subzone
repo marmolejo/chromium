@@ -4,7 +4,7 @@ URL: http://www.chromium.org/Home
 License: BSD
 
 Description:
-This directory conatins a subset of files from Chromium sources. Original files
+This directory contains a subset of files from Chromium sources. Original files
 are kept in their respective original folders with the same directory structure
 preserved.
 
