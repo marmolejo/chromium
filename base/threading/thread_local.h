@@ -53,7 +53,6 @@
 
 #include "base/base_export.h"
 #include "base/basictypes.h"
-#include "base/threading/thread_local_storage.h"
 
 #if defined(OS_POSIX)
 #include <pthread.h>
